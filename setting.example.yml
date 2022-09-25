@@ -1,0 +1,17 @@
+ncmb:
+  domain: mbaas.api.nifcloud.com
+  version: 2013-09-01
+  applicationKey: YOUR_APPLICATION_KEY
+  clientKey: YOUR_CLIENT_KEY
+  signature:
+    method:
+      name: SignatureMethod
+      value: HmacSHA256
+    version:
+      name: SignatureVersion
+      value: 2
+  headers:
+    timestamp: X-NCMB-Timestamp
+    applicationKey: X-NCMB-Application-Key
+    signature: X-NCMB-Signature
+    session: x-ncmb-apps-session-token
