@@ -1,6 +1,9 @@
 const NCMB = require('ncmb');
+const fs = require('fs');
+
 const ncmb = new NCMB("9170ffcb91da1bbe0eff808a967e12ce081ae9e3262ad3e5c3cac0d9e54ad941", "9e5014cd2d76a73b4596deffdc6ec4028cfc1373529325f8e71b7a6ed553157d", {
 	fqdn: "localhost",
+	scriptFqdn: "localhost",
 	protocol: "http",
 	port: 3000
 });
@@ -24,12 +27,38 @@ const Test = ncmb.DataStore("Test");
 	const r = await ncmb.Role
 		.equalTo('roleName', 'test')
 		.fetch();
-	await r.delete();
+	if (Object.keys(r).length > 0) {
+		await r.delete();
+	}
 	const role = new ncmb.Role('test');
 	await role.save();
 	const user = new ncmb.User;
 	await user.set('userName', 'test').set('password', 'test').signUpByAccount();
 	const u = await ncmb.User.login('test', 'test');
 	await u.delete();
-})()
 
+	const data = fs.readFileSync('./test.jpg');
+	await ncmb.File.upload('test.jpg', data);
+	const buffer = await ncmb.File.download('test.jpg', 'blob');
+	fs.writeFileSync('./test2.jpg', buffer);
+});
+
+(async () => {
+	const buffer = await ncmb.File.download('test.jpg', 'blob');
+	fs.writeFileSync('./test2.jpg', buffer);
+});
+
+(async () => {
+	console.log(await ncmb.Script
+		.query({name: 'test'})
+    .exec("GET", "script_test_get.js"));
+	console.log(await ncmb.Script
+		.data({"name": "test"}) 
+		.exec("POST", "script_test_post.js"));
+	console.log(await ncmb.Script
+		.data({"name": "test2"}) 
+		.exec("PUT", "script_test_put.js"));
+	console.log(await ncmb.Script
+		.query({name: 'test'})
+		.exec("DELETE", "script_test_delete.js"));
+});
