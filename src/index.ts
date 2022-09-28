@@ -11,8 +11,7 @@ app.use(bodyParser.raw({
     type: 'multipart/form-data'
 }));
 app.use(express.urlencoded({ extended: true }));
-const router = routing(express.Router());
-app.use('*', router);
+routing(app);
 app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
     res.header("Access-Control-Allow-Origin", "*");
     res.header("Access-Control-Allow-Methods", "*")

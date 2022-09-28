@@ -1,4 +1,4 @@
-import { Request, Response, Router } from "express";
+import { Request, Response, Router, Express } from "express";
 import YAML from 'yaml';
 import fs from 'fs';
 import crypto from 'crypto';
@@ -8,11 +8,12 @@ import multer from "multer";
 const str = fs.readFileSync('./setting.yaml');
 const setting = YAML.parse(str.toString());
 
-const routing = (router: Router) => {
-	router.all('*', async (req: Request, res: Response) => {
+const routing = (router: Express) => {
+	const request = async (req: Request, res: Response) => {
 		const time = new Date().toISOString();
-		const domain = req.baseUrl.indexOf(setting.ncmb.version) === 1 ? setting.ncmb.domain : setting.ncmb.script.domain;
-		const signature = createSignature(req.method, domain, time, req.baseUrl, req.query);
+		const baseUrl = req.originalUrl.replace(/\?.*/, '');
+		const domain = baseUrl.indexOf(setting.ncmb.version) === 1 ? setting.ncmb.domain : setting.ncmb.script.domain;
+		const signature = createSignature(req.method, domain, time, baseUrl, req.query);
 		const headers: {[key: string]: string} = {
 			[setting.ncmb.headers.applicationKey]: setting.ncmb.applicationKey,
 			[setting.ncmb.headers.timestamp]: time,
@@ -27,7 +28,7 @@ const routing = (router: Router) => {
 			const reg = new RegExp(`^/${setting.ncmb.version}/files/`);
 			const responseType = req.method.toUpperCase() == 'GET' && reg.test(req.baseUrl) ? 'arraybuffer' : 'json';
 			const response = await axios({
-				url: `https://${domain}${req.baseUrl}`,
+				url: `https://${domain}${baseUrl}`,
 				method: req.method,
 				headers: headers,
 				params: req.query,
@@ -48,7 +49,18 @@ const routing = (router: Router) => {
 			const err = e as AxiosError;
 			err.response && res.status(err.response.status).json(err.response.data);
 		}
+	}
+
+	router.all('/script/:fileName', async (req: Request, res: Response) => {
+		if (setting.ncmb.script.no_signature.indexOf(req.params.fileName) === -1) {
+			return res.status(401).json({code: 'E401001', error: 'Unauthorized.'});
+		}
+		req.originalUrl = req.originalUrl.replace('/script/', `/${setting.ncmb.script.version}/script/`);
+		request(req, res);
 	});
+	
+	router.all('*', request);
+
 	return router;
 };
 

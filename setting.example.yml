@@ -1,8 +1,13 @@
 ncmb:
-  domain: mbaas.api.nifcloud.com
-  version: 2013-09-01
   applicationKey: YOUR_APPLICATION_KEY
   clientKey: YOUR_CLIENT_KEY
+  domain: mbaas.api.nifcloud.com
+  version: 2013-09-01
+  script:
+    domain: script.mbaas.api.nifcloud.com
+    version: 2015-09-01
+    no_signature:
+      - YOUR_SCRIPT.js
   signature:
     method:
       name: SignatureMethod
