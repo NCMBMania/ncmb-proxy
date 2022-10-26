@@ -20,17 +20,28 @@ const Test = ncmb.DataStore("Test");
 	await test
 		.set('msg', 'Hello, NCMB!')
 		.save();
+	await test
+		.set('msg', 'Hello, again')
+		.update();
+	await test.delete();
 	const res2 = await Test
 		.limit(10)
 		.fetchAll();
 	console.log(res2);
-	
+	/*
+	const test2 = new Test;
+	await test2.set('objectId', 'bIJYu1y1kBrEthK6')
+		.set('msg', 'Helllllo')
+		.update();
+	await test2.delete();	
+	*/
 	const r = await ncmb.Role
 		.equalTo('roleName', 'test')
 		.fetch();
 	if (Object.keys(r).length > 0) {
 		await r.delete();
 	}
+	return;
 	const role = new ncmb.Role('test');
 	await role.save();
 	const user = new ncmb.User;
@@ -42,7 +53,7 @@ const Test = ncmb.DataStore("Test");
 	await ncmb.File.upload('test.jpg', data);
 	const buffer = await ncmb.File.download('test.jpg', 'blob');
 	fs.writeFileSync('./test2.jpg', buffer);
-});
+})();
 
 (async () => {
 	const buffer = await ncmb.File.download('test.jpg', 'blob');
@@ -62,7 +73,7 @@ const Test = ncmb.DataStore("Test");
 	console.log(await ncmb.Script
 		.query({name: 'test'})
 		.exec("DELETE", "script_test_delete.js"));
-})();
+});
 
 (async () => {
 	const res = await axios.get('http://127.0.0.1:3000/script/script_test_get.js');

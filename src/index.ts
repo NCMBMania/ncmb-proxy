@@ -1,17 +1,19 @@
 import express from 'express';
 import { routing } from './routes';
 import bodyParser from 'body-parser';
-const app: express.Express = express()
+let base: express.Express = express()
+import expressWs from 'express-ws';
+const { app, getWss } = expressWs(base);
 
 app.use(express.json());
 // app.use(express.raw());
 app.use(bodyParser.raw({
     inflate: true,
-    limit: '100kb',
+    limit: '200kb',
     type: 'multipart/form-data'
 }));
+routing(app, getWss());
 app.use(express.urlencoded({ extended: true }));
-routing(app);
 app.use((req: express.Request, res: express.Response, next: express.NextFunction) => {
     res.header("Access-Control-Allow-Origin", "*");
     res.header("Access-Control-Allow-Methods", "*")
