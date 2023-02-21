@@ -17,37 +17,53 @@ const yaml_1 = __importDefault(require("yaml"));
 const fs_1 = __importDefault(require("fs"));
 const crypto_1 = __importDefault(require("crypto"));
 const axios_1 = __importDefault(require("axios"));
+const passport_1 = __importDefault(require("passport"));
+const passport_twitter_1 = require("passport-twitter");
 const str = fs_1.default.readFileSync('./setting.yaml');
 const setting = yaml_1.default.parse(str.toString());
 let websocket = null;
 const connections = new Map;
+// Setting for Twitter auth
+if (setting.twitter) {
+    const strategy = new passport_twitter_1.Strategy({
+        consumerKey: setting.twitter.consumerKey,
+        consumerSecret: setting.twitter.consumerSecret,
+        callbackURL: '/auth/twitter/callback'
+    }, (accessToken, tokenSecret, profile, done) => __awaiter(void 0, void 0, void 0, function* () {
+        return done(null, Object.assign(Object.assign({}, profile), { accessToken, tokenSecret }));
+    }));
+    passport_1.default.use(strategy);
+    passport_1.default.serializeUser((user, done) => {
+        done(null, user);
+    });
+    passport_1.default.deserializeUser(function (obj, done) {
+        done(null, false);
+    });
+}
+const getRequest = (method, originalUrl, params, data, contentType, session) => {
+    const time = new Date().toISOString();
+    const baseUrl = originalUrl.replace(/\?.*/, '');
+    const domain = baseUrl.indexOf(setting.ncmb.version) === 1 ? setting.ncmb.domain : setting.ncmb.script.domain;
+    const signature = createSignature(method, domain, time, baseUrl, params);
+    const headers = {
+        [setting.ncmb.headers.applicationKey]: setting.ncmb.applicationKey,
+        [setting.ncmb.headers.timestamp]: time,
+        [setting.ncmb.headers.signature]: signature,
+    };
+    headers["Content-Type"] = contentType;
+    if (session) {
+        headers[setting.ncmb.headers.session] = session;
+    }
+    return { url: `https://${domain}${baseUrl}`, domain, headers, method, params, data };
+};
 const routing = (router, wss) => {
     const request = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-        const time = new Date().toISOString();
-        const baseUrl = req.originalUrl.replace(/\?.*/, '');
-        const domain = baseUrl.indexOf(setting.ncmb.version) === 1 ? setting.ncmb.domain : setting.ncmb.script.domain;
-        const signature = createSignature(req.method, domain, time, baseUrl, req.query);
-        const headers = {
-            [setting.ncmb.headers.applicationKey]: setting.ncmb.applicationKey,
-            [setting.ncmb.headers.timestamp]: time,
-            [setting.ncmb.headers.signature]: signature,
-        };
-        headers["Content-Type"] = req.headers["content-type"];
-        if (req.headers[setting.ncmb.headers.session]) {
-            headers[setting.ncmb.headers.session] = req.headers[setting.ncmb.headers.session];
-        }
+        const requestConfig = getRequest(req.method, req.originalUrl, req.query, req.body, req.headers['content-type'], req.headers[setting.ncmb.headers.session]);
         try {
             // ファイルストアへのGETリクエストであれば、レスポンスはArrayBufferで返す
             const reg = new RegExp(`^/${setting.ncmb.version}/files/`);
             const responseType = req.method.toUpperCase() == 'GET' && reg.test(req.baseUrl) ? 'arraybuffer' : 'json';
-            const response = yield (0, axios_1.default)({
-                url: `https://${domain}${baseUrl}`,
-                method: req.method,
-                headers: headers,
-                params: req.query,
-                data: req.body,
-                responseType,
-            });
+            const response = yield (0, axios_1.default)(Object.assign(Object.assign({}, requestConfig), { responseType }));
             // レスポンスのヘッダーで判別
             const contentType = response.headers["content-type"];
             if (contentType === 'application/json') {
@@ -58,6 +74,26 @@ const routing = (router, wss) => {
                 // Arraybufferの場合は、レスポンスヘッダーを設定して、そのまま返す
                 res.setHeader('content-type', contentType);
                 res.send(response.data);
+            }
+            // 監査ログ
+            if (setting.ncmb.audit) {
+                const auditConfig = getRequest('POST', `/${setting.ncmb.version}/classes/_auditLogs/`, {}, {
+                    "method": req.method,
+                    "requestUrl": req.originalUrl.replace(/\?.*/, ''),
+                    "query": req.query,
+                    "body": req.body,
+                    "headers": req.headers,
+                    "response": response.data,
+                    "responseContentType": response.headers['content-type'],
+                    "session": req.headers[setting.ncmb.headers.session],
+                    "acl": {
+                        "role:Administrator": {
+                            "read": true,
+                            "write": true
+                        }
+                    }
+                }, "application/json", "");
+                yield (0, axios_1.default)(Object.assign(Object.assign({}, auditConfig), { responseType: "json" }));
             }
             // 検索系なら除外
             if (req.method.toUpperCase() === 'GET')
@@ -93,6 +129,48 @@ const routing = (router, wss) => {
         }
         req.originalUrl = req.originalUrl.replace('/script/', `/${setting.ncmb.script.version}/script/`);
         request(req, res);
+    }));
+    router.get('/auth/twitter', (req, res, done) => {
+        ['callback', 'redirect'].forEach(key => {
+            if (req.query[key]) {
+                res.cookie(key, req.query[key], {
+                    path: '/',
+                    secure: true,
+                    httpOnly: true,
+                });
+            }
+        });
+        done();
+    }, passport_1.default.authenticate('twitter'));
+    router.get('/auth/twitter/callback', passport_1.default.authenticate('twitter', { failureRedirect: '/?auth_failed' }), (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+        console.log('hello');
+        const user = req.user;
+        const params = {
+            // @ts-ignore
+            id: req.user.id,
+            // @ts-ignore
+            screen_name: req.user.username,
+            oauth_consumer_key: setting.twitter.consumerKey,
+            consumer_secret: setting.twitter.consumerSecret,
+            oauth_token: user.accessToken,
+            oauth_token_secret: user.tokenSecret,
+        };
+        const config = getRequest('POST', `/${setting.ncmb.version}/users`, {}, { "authData": { "twitter": params } }, 'application/json');
+        try {
+            const response = yield (0, axios_1.default)(Object.assign(Object.assign({}, config), { responseType: "json" }));
+            console.log(req.cookies);
+            if (req.cookies.callback) {
+                return res.render('callback', { callback: req.cookies.callback, data: response.data });
+            }
+            if (req.cookies.redirect) {
+                return res.redirect(`${req.cookies.redirect}?data=${JSON.stringify(response.data)}`);
+            }
+            res.send(response.data);
+        }
+        catch (e) {
+            console.error(e);
+            res.send({});
+        }
     }));
     router.ws('*', (ws, req) => {
         const classname = req.query.classname;

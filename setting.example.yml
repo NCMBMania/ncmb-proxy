@@ -3,6 +3,7 @@ ncmb:
   clientKey: YOUR_CLIENT_KEY
   domain: mbaas.api.nifcloud.com
   version: 2013-09-01
+  audit: false
   script:
     domain: script.mbaas.api.nifcloud.com
     version: 2015-09-01
@@ -20,3 +21,6 @@ ncmb:
     applicationKey: X-NCMB-Application-Key
     signature: X-NCMB-Signature
     session: x-ncmb-apps-session-token
+twitter:
+  consumerKey: YOUR_CONSUMER_KEY
+  consumerSecret: YOUR_CONSUMER_SECRET
